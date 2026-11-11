@@ -85,8 +85,9 @@ def main():
         )
         if not videos:
             raise SystemExit("No supported video files found in public Videos.zip")
-        selected = videos[: args.max_videos]
-
+        # Some entries in the public archive are incomplete/corrupt MP4 files.
+        # Scan the archive until we collect the requested number of videos that
+        # actually decode; do not assume the first sorted files are usable.
         options = mp.tasks.vision.PoseLandmarkerOptions(
             base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),
             running_mode=mp.tasks.vision.RunningMode.IMAGE,
@@ -96,13 +97,18 @@ def main():
         all_visible = []
         frame_count = 0
         detected_count = 0
+        usable_videos = 0
+        unreadable_videos = 0
         with mp.tasks.vision.PoseLandmarker.create_from_options(options) as detector:
-            for video_path in selected:
+            for video_path in videos:
+                if usable_videos >= args.max_videos:
+                    break
                 capture = cv2.VideoCapture(str(video_path))
                 total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
                 fps = float(capture.get(cv2.CAP_PROP_FPS) or 0)
                 if not capture.isOpened() or total_frames < 1:
                     capture.release()
+                    unreadable_videos += 1
                     clip_rows.append({"clip": video_path.name, "status": "unreadable"})
                     continue
 
@@ -112,29 +118,40 @@ def main():
                 })
                 clip_detected = 0
                 clip_visibility = []
+                clip_frames = 0
                 for frame_index in positions:
                     capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
                     ok, frame = capture.read()
                     if not ok:
                         continue
                     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    result = detector.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(rgb)))
+                    result = detector.detect(mp.Image(
+                        image_format=mp.ImageFormat.SRGB,
+                        data=np.ascontiguousarray(rgb),
+                    ))
                     frame_count += 1
+                    clip_frames += 1
                     poses = result.pose_landmarks or []
                     if poses:
                         detected_count += 1
                         clip_detected += 1
-                        visibility = [float(p.visibility) for p in poses[0]]
-                        visible_fraction = sum(v >= 0.5 for v in visibility) / len(visibility)
+                        visibility = [float(point.visibility) for point in poses[0]]
+                        visible_fraction = sum(value >= 0.5 for value in visibility) / len(visibility)
                         clip_visibility.append(visible_fraction)
                         all_visible.append(visible_fraction)
                 capture.release()
+                if clip_frames == 0:
+                    unreadable_videos += 1
+                    clip_rows.append({"clip": video_path.name, "status": "no_decodable_frames"})
+                    continue
+                usable_videos += 1
                 clip_rows.append({
                     "clip": video_path.name,
+                    "status": "inference_completed",
                     "duration_seconds": round(total_frames / fps, 3) if fps > 0 else None,
-                    "sampled_frames": len(positions),
+                    "sampled_frames": clip_frames,
                     "frames_with_pose": clip_detected,
-                    "pose_detection_rate": clip_detected / len(positions) if positions else 0,
+                    "pose_detection_rate": clip_detected / clip_frames,
                     "mean_visible_landmark_fraction_when_detected": statistics.mean(clip_visibility) if clip_visibility else 0,
                 })
 
@@ -150,7 +167,7 @@ def main():
             "archive_extracted_files": extracted,
             "available_video_files": len(videos),
             "available_video_annotation_archives": extracted["annotations"],
-            "sampled_video_files": len(selected),
+            "sampled_video_files": usable_videos,\n            "unreadable_video_files_skipped": unreadable_videos,
             "frames_per_video_requested": args.frames_per_video,
             "inference_model": "MediaPipe Pose Landmarker Lite",
             "model_sha256": model_sha,
