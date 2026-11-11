@@ -54,6 +54,37 @@ def safe_extract(archive: Path, destination: Path) -> int:
     return count
 
 
+def resolve_lfs_pointer(path: Path) -> bool:
+    """Replace a Git LFS pointer with its public media.githubusercontent.com object."""
+    try:
+        prefix = path.read_bytes()[:256]
+    except OSError:
+        return False
+    if not prefix.startswith(b"version https://git-lfs.github.com/spec/v1"):
+        return True
+    pointer = path.read_text(errors="replace")
+    oid = next((line.split(" ", 1)[1] for line in pointer.splitlines() if line.startswith("oid sha256:")), None)
+    size_text = next((line.split(" ", 1)[1] for line in pointer.splitlines() if line.startswith("size ")), None)
+    if not oid or not size_text:
+        return False
+    # GitHub's media endpoint resolves the LFS object stored for this exact repository path.
+    relative = path.relative_to(DATASET_WORK_ROOT).as_posix()
+    url = f"https://media.githubusercontent.com/media/dvanderhaar/uj-aqa-cricketvision/main/CricketVision_dataset_release/{relative}"
+    temporary = path.with_suffix(path.suffix + ".download")
+    digest = hashlib.sha256()
+    total = 0
+    with urllib.request.urlopen(url, timeout=180) as response, temporary.open("wb") as output:
+        while chunk := response.read(1024 * 1024):
+            output.write(chunk)
+            digest.update(chunk)
+            total += len(chunk)
+    if total != int(size_text) or digest.hexdigest() != oid:
+        temporary.unlink(missing_ok=True)
+        raise ValueError(f"Git LFS integrity check failed for {path.name}")
+    temporary.replace(path)
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--max-videos", type=int, default=12)
@@ -70,8 +101,10 @@ def main():
     if model_sha != manifest["sha256"]:
         raise SystemExit("Pose model checksum does not match models/manifest.json")
 
+    global DATASET_WORK_ROOT
     with tempfile.TemporaryDirectory(prefix="golicoach-cricketvision-") as temp:
         work = Path(temp)
+        DATASET_WORK_ROOT = work / "videos"
         hashes = {}
         extracted = {}
         for name, url in ARCHIVES.items():
@@ -85,6 +118,8 @@ def main():
         )
         if not videos:
             raise SystemExit("No supported video files found in public Videos.zip")
+        # GitHub source archives can contain Git LFS pointer text instead of video bytes.
+        # Resolve each clip through GitHub Media and verify the LFS SHA-256/size before decoding.
         # Some entries in the public archive are incomplete/corrupt MP4 files.
         # Scan the archive until we collect the requested number of videos that
         # actually decode; do not assume the first sorted files are usable.
@@ -103,6 +138,15 @@ def main():
             for video_path in videos:
                 if usable_videos >= args.max_videos:
                     break
+                try:
+                    if not resolve_lfs_pointer(video_path):
+                        unreadable_videos += 1
+                        clip_rows.append({"clip": video_path.name, "status": "invalid_lfs_pointer"})
+                        continue
+                except Exception as error:
+                    unreadable_videos += 1
+                    clip_rows.append({"clip": video_path.name, "status": "lfs_download_failed", "reason": str(error)[:240]})
+                    continue
                 capture = cv2.VideoCapture(str(video_path))
                 total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
                 fps = float(capture.get(cv2.CAP_PROP_FPS) or 0)
