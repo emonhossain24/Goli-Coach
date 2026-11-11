@@ -1,11 +1,11 @@
-# Source register — checked 26 October 2026
+# Source register — updated 11 November 2026
 
-| Source | Observed access | Rights | Cricket suitability | Imported rows |
+| Source | Access | Rights / use notes | Suitability | Imported rows |
 |---|---|---|---|---:|
-| https://data.mendeley.com/datasets/rnh3x48nfb/2 | Version 2 page available, published 27 Oct 2025 | Page lists CC BY 4.0 | Ten traditional sports, no cricket class; reference only | 0 |
-| https://huggingface.co/datasets/sarimshahzad/Cric-360 | v2 card lists 13,545 real broadcast ground frames; file access requires accepting Hugging Face conditions | Real grounds subset listed Apache-2.0; underlying broadcast rights remain with rights-holders; synthetic games subset is research-only | Suitable for cricket-domain pose detection/visibility coverage; no human body-joint ground truth | 0 (evaluation runner added; inference pending access) |
-| https://data.gov.bd/dataset | Catalog available | Review each dataset; no blanket reuse permission assumed | No relevant verified observation imported | 0 |
+| https://github.com/dvanderhaar/uj-aqa-cricketvision | Public GitHub repository and downloadable video/annotation archives; no gated account approval | Cite Moodley & van der Haar (WACV 2025); respect source-video rights; do not redistribute clips | Real cricket stroke clips, temporal phases and body-region action-quality ratings; not joint-coordinate ground truth | 0 (sampled at inference time; no clips committed) |
+| https://data.mendeley.com/datasets/rnh3x48nfb/2 | Public dataset page | Page lists CC BY 4.0 | Ten traditional sports, no cricket class; reference only | 0 |
+| https://data.gov.bd/dataset | Public catalog | Review each dataset; no blanket reuse permission assumed | No relevant verified observation imported | 0 |
 
-Original material: 18 bilingual vocabulary terms and six general practice drills authored for this app. They are UI/learning content, not expert-reviewed instructions or supervised model labels. Synthetic tests remain separate from user observations. Government terms and FAQ are reference links: https://data.gov.bd/terms-of-use and https://www.data.gov.bd/bn/faqs.
+The gated Hugging Face Cric-360 source has been removed from the active evaluation plan. Original app material (18 bilingual vocabulary terms and six general practice drills) is UI/learning content, not expert-reviewed instruction or supervised model labels.
 
-Consented Bangladesh cricket video corpus: absent. Local player data collection, coaching review and split-by-player evaluation remain required. Admin-added sources start quarantined; no automatic fetch, indexing, training or publication occurs.
+CricketVision action-quality ratings are not per-joint coordinate labels. Bangladesh-specific pose accuracy requires consented, representative Bangladesh footage with independently annotated joints and a held-out player/match split. No Bangladesh accuracy percentage is claimed.
