@@ -1,39 +1,35 @@
-# Cricket dataset evaluation update — 11 November 2026
+# Public cricket dataset and real model inference — 11 November 2026
 
-## Dataset selected
+## Dataset
 
-Primary domain-coverage dataset: **Cric-360 v2 / `sarimshahzad/Cric-360`**, real broadcast cricket ground frames. The dataset card describes 13,545 real frames (v1+v2), including a recommended held-out test split of 1,543 frames and 408 frames tagged `ban test`. Its files require a Hugging Face account and acceptance of the dataset access conditions. The real `grounds` subset is listed as Apache-2.0; underlying broadcast rights remain with their owners. Do not use the separate synthetic `games` subset without its research-only permission.
+The gated Cric-360/Hugging Face source is no longer used. The evaluation now uses the public UJ-AQA-CricketVision release by Moodley and van der Haar (WACV 2025).
 
-Sources:
-- Dataset card: https://huggingface.co/datasets/sarimshahzad/Cric-360
-- Dataset repository: https://github.com/Cogni-Qube/Cric360-Dataset
+- Repository: https://github.com/dvanderhaar/uj-aqa-cricketvision
+- Public video archive: https://github.com/dvanderhaar/uj-aqa-cricketvision/tree/main/CricketVision_dataset_release
+- Paper: https://openaccess.thecvf.com/content/WACV2025/html/Moodley_I3D-AE-LSTM_A_2-Stream_Autoencoder_for_Action_Quality_Assessment_using_a_Newly_Created_Cricket_Batsman_Video_Dataset_WACV_2025_paper.html
 
-## Evaluation code
+The repository describes 8,540 cricket stroke clips with temporal phases and body-region action-quality ratings. Its video and annotation archives are directly downloadable from public GitHub without gated account approval. Cite the authors and respect source-video rights; do not redistribute extracted clips.
 
-Added `scripts/evaluate_cric360.py`. After accepting access conditions on Hugging Face and installing optional dependencies, run:
+## Real inference
+
+The new scripts/evaluate_cricketvision.py downloads the public video and annotation archives, safely extracts them, samples actual frames from real cricket videos and runs the pinned MediaPipe Pose Landmarker Lite model. It records archive/model SHA-256 hashes, video/frame counts, pose detections and visible-landmark coverage.
+
+Run locally:
 
 ```bash
-pip install datasets mediapipe numpy
-huggingface-cli login
-python scripts/evaluate_cric360.py --split test --limit 250 --output cric360_pose_coverage.json
+pip install -r server/requirements.lock
+python scripts/download_model.py
+python scripts/evaluate_cricketvision.py --max-videos 12 --frames-per-video 5 --output cricketvision_inference.json
 ```
 
-The script runs the existing pinned MediaPipe Pose Landmarker Lite model on a deterministic sample from the dataset's test split and reports pose-detection frame rate and visible-landmark coverage, including region breakdowns. This is a cricket-domain robustness/coverage check, **not joint-coordinate accuracy**.
+GitHub Actions runs a small real-inference sample and uploads its JSON report as an artifact.
 
-## Human joint annotation — required for accuracy
+## Interpretation and Bangladesh accuracy
 
-Cric-360 does not provide human body-joint coordinates. Its ground/pitch labels and metadata cannot be treated as body-joint ground truth. For a genuine PCK/OKS result:
-1. Select a stratified sample from the held-out cricket frames (include Bangladesh-tagged frames, different camera angles, lighting and occlusion).
-2. Have annotators independently label visible MediaPipe body joints 11–32 in normalized image coordinates; mark occluded/out-of-frame joints as not visible rather than guessing.
-3. Have a second reviewer adjudicate ambiguous joints and record the annotation tool, annotator protocol and review status.
-4. Keep all frames from the same match/sequence in one split to avoid leakage. Do not tune the model on the test split.
-5. Preserve the source dataset's access and attribution terms; do not republish extracted broadcast frames.
+This is real model inference on cricket video. Detection rate and landmark visibility are coverage metrics, not PCK/OKS or coordinate accuracy. CricketVision Head, Shoulder, Hands, Hips and Feet ratings are subjective action-quality labels, not per-joint coordinate ground truth.
 
-The existing `scripts/evaluate_bangladesh.py` is specifically consent-gated for locally collected Bangladesh footage. It must not be bypassed by relabelling third-party broadcast images as consented participant footage. A separate general Cric-360 PCK evaluator should be added only after an annotation schema and rights review are approved.
+The selected set is not Bangladesh-representative. It cannot establish Bangladesh-specific accuracy. That requires held-out Bangladesh cricket footage with independently human-labelled body-joint coordinates, adjudicated labels and player/match-separated splits. The consent-gated Bangladesh evaluator remains available for that purpose. No Bangladesh accuracy percentage is fabricated or inferred from another country's footage.
 
-## Current result status
+## Result status
 
-- Cric-360 model inference: **not run in this repository session**. Dataset file access requires the account holder to accept Hugging Face conditions; no dataset frames were downloaded here.
-- Human joint annotations: **not created**. No annotator-reviewed ground truth was supplied, and model-generated landmarks are not independent human labels.
-- Bangladesh-specific accuracy: **NOT EVALUATED**.
-- No accuracy percentage or skill score is claimed.
+The inference runner and CI execution are configured. A measured result is available only after the workflow completes and its cricketvision-inference artifact is produced; no metric is claimed before that run.
